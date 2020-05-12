@@ -227,7 +227,8 @@ class ExifTool(object):
 def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
         copy_files=False, test=False, remove_duplicates=True, day_begins=0,
         additional_groups_to_ignore=['File'], additional_tags_to_ignore=[],
-        use_only_groups=None, use_only_tags=None, verbose=True, keep_filename=False):
+        use_only_groups=None, use_only_tags=None, verbose=True, keep_filename=False,
+        ignore_symlink=True, moveadd_symlink=False):
     """
     This function is a convenience wrapper around ExifTool based on common usage scenarios for sortphotos.py
 
@@ -349,6 +350,12 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
             print()
             continue
 
+        # ignore symlink if ignore_symlink is set
+        if ignore_symlink and os.path.islink(src_file):
+            print('Symlink file.  will be skipped')
+            print()
+            continue
+
         if verbose:
             print('Date/Time: ' + str(date))
             print('Corresponding Tags: ' + ', '.join(keys))
@@ -418,8 +425,13 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
 
 
         # finally move or copy the file
+        if moveadd_symlink:
+            reldest = os.path.relpath(dest_file, os.path.dirname(src_file))
+
         if test:
             test_file_dict[dest_file] = src_file
+            if ( not copy_files and moveadd_symlink ):
+                print("Create symlink: link " + src_file + " to " + reldest )
 
         else:
 
@@ -430,7 +442,9 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
                     shutil.copy2(src_file, dest_file)
                 else:
                     shutil.move(src_file, dest_file)
-
+                    if moveadd_symlink:
+                        print("Create symlink: link " + src_file + " to " + reldest)
+                        os.symlink(reldest, src_file)
 
 
         if verbose:
@@ -489,6 +503,10 @@ def main():
                     default=None,
                     help='specify a restricted set of tags to search for date information\n\
     e.g., EXIF:CreateDate')
+    parser.add_argument('--ignore_symlink', action='store_true',
+                        help='If the source file is a symlink, ignore copy/move action.', default=True)
+    parser.add_argument('--moveadd_symlink', action='store_true',
+                        help='After a source file is moved, replace the source file with a symlink', default=False)
 
     # parse command line arguments
     args = parser.parse_args()
@@ -496,7 +514,8 @@ def main():
     sortPhotos(args.src_dir, args.dest_dir, args.sort, args.rename, args.recursive,
         args.copy, args.test, not args.keep_duplicates, args.day_begins,
         args.ignore_groups, args.ignore_tags, args.use_only_groups,
-        args.use_only_tags, not args.silent, args.keep_filename)
+        args.use_only_tags, not args.silent, args.keep_filename,
+        args.ignore_symlink, args.moveadd_symlink)
 
 if __name__ == '__main__':
     main()
